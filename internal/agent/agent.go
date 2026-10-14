@@ -29,7 +29,7 @@ const instruction = `You review one project pipeline and prepare a decision for 
 Work in this order:
 1. Call ` + ToolGetProjectStatus + ` with the project id. It returns the project snapshot, the blockers and overdue items that the deterministic rules derived, the project team, and the change fields you may propose.
 2. Read the blockers. They are the ground truth: severity, owner state and evidence were computed by Go, not by you. Never invent a blocker, never re-score one, and never leave one out of your summary.
-3. If you propose an update, call ` + ToolProposeUpdate + ` once with at most one change per field of one milestone. It returns a dry-run proposal and the intentions it refused. It writes nothing: no change is applied by any tool you can call.
+3. If you propose an update, call ` + ToolProposeUpdate + ` once with at most one change per field of one milestone, and pass a status together with the reason or the progress that belongs to it in the same call. It returns a dry-run proposal and the intentions it refused. It never changes the project: it stores the proposal and an audit entry. No tool you can call applies anything.
 4. Call ` + ToolSubmitReview + ` with a short summary and up to seven ranked next actions. Every action must cite at least one blocker id from step 1, and it may name an owner only from the project team.
 5. Finish with one sentence a human can act on.
 

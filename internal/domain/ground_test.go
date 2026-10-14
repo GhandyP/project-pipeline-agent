@@ -228,10 +228,11 @@ func TestGroundSaysSoWhenThereIsNothingToReport(t *testing.T) {
 }
 
 // TestGroundPassesChangesThroughTheDryRunGate covers the second half of the
-// gate: a change the rules refuse is reported, and the admitted ones leave as a
-// dry-run proposal, with nothing written.
+// gate: the change set of one milestone is decided as a unit, a set that would
+// leave the milestone contradictory is refused entirely, and an admissible set
+// leaves as a dry run with nothing written.
 func TestGroundPassesChangesThroughTheDryRunGate(t *testing.T) {
-	review := grounded(t, "missing-owner", ModelReview{
+	refused := grounded(t, "missing-owner", ModelReview{
 		Summary: "Nobody owns the KyB checklist.",
 		Changes: []ModelChange{
 			{MilestoneID: "m-1", Field: "owner_id", Value: "u-sofia"},
@@ -239,11 +240,28 @@ func TestGroundPassesChangesThroughTheDryRunGate(t *testing.T) {
 			{MilestoneID: "m-1", Field: "due_date", Value: "next friday"},
 		},
 	})
-
-	if len(review.Proposals) != 1 {
-		t.Fatalf("proposals = %+v, want one dry-run proposal", review.Proposals)
+	if len(refused.Proposals) != 0 {
+		t.Fatalf("proposals = %+v, want none: the set would leave m-1 done at 30%%", refused.Proposals)
 	}
-	proposal := review.Proposals[0]
+	reasons := rejectionReasons(refused)
+	if !strings.Contains(reasons, "status done would contradict progress_percent=30") {
+		t.Errorf("rejections = %s, want the contradiction refusal", reasons)
+	}
+	if !strings.Contains(reasons, "neither RFC3339 nor YYYY-MM-DD") {
+		t.Errorf("rejections = %s, want the unparsable due date refusal", reasons)
+	}
+	if len(refused.Findings.Blockers) != 1 {
+		t.Errorf("findings = %d blockers, want the derived one", len(refused.Findings.Blockers))
+	}
+
+	admitted := grounded(t, "missing-owner", ModelReview{
+		Summary: "Nobody owns the KyB checklist.",
+		Changes: []ModelChange{{MilestoneID: "m-1", Field: "owner_id", Value: "u-sofia"}},
+	})
+	if len(admitted.Proposals) != 1 {
+		t.Fatalf("proposals = %+v, want one dry-run proposal", admitted.Proposals)
+	}
+	proposal := admitted.Proposals[0]
 	if !proposal.DryRun {
 		t.Error("the proposal is not a dry run")
 	}
@@ -251,14 +269,10 @@ func TestGroundPassesChangesThroughTheDryRunGate(t *testing.T) {
 		t.Errorf("expected_version = %d, want 3", proposal.ExpectedVersion)
 	}
 	if len(proposal.Changes) != 1 || proposal.Changes[0].After != "u-sofia" {
-		t.Errorf("changes = %+v, want only the admissible owner change", proposal.Changes)
+		t.Errorf("changes = %+v, want the owner change", proposal.Changes)
 	}
-	reasons := rejectionReasons(review)
-	if !strings.Contains(reasons, "status done would contradict progress_percent=30") {
-		t.Errorf("rejections = %s, want the contradiction refusal", reasons)
-	}
-	if !strings.Contains(reasons, "neither RFC3339 nor YYYY-MM-DD") {
-		t.Errorf("rejections = %s, want the unparsable due date refusal", reasons)
+	if len(admitted.Rejections) != 0 {
+		t.Errorf("rejections = %s, want none", rejectionReasons(admitted))
 	}
 }
 

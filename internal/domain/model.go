@@ -159,6 +159,31 @@ func (s ProjectSnapshot) TeamMember(id string) (Owner, bool) {
 	return Owner{}, false
 }
 
+// ApproverMember reports whether a name identifies a member of the project
+// team. The match accepts the member id or the full name, ignoring case and
+// repeated spaces, because a human types it.
+//
+// Only a project owner may approve a tracker update. The name is accountability,
+// not authentication: nothing here proves who typed it, which is why
+// docs/missing-work.md lists identity as an open gap.
+func (s ProjectSnapshot) ApproverMember(name string) (Owner, bool) {
+	want := normalizePerson(name)
+	if want == "" {
+		return Owner{}, false
+	}
+	for _, member := range s.Team {
+		if normalizePerson(member.ID) == want || normalizePerson(member.Name) == want {
+			return member, true
+		}
+	}
+	return Owner{}, false
+}
+
+// normalizePerson folds a name or an id for comparison.
+func normalizePerson(value string) string {
+	return strings.Join(strings.Fields(strings.ToLower(value)), " ")
+}
+
 // SortedMilestones returns the milestones in a stable order, so every derived
 // list is deterministic regardless of the order the file was written in.
 func (s ProjectSnapshot) SortedMilestones() []Milestone {

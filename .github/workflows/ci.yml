@@ -17,4 +17,4 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -count=1
       - name: Offline demo
-        run: go run ./cmd/pipeline demo --project delta-onboarding --approve --as "CI"
+        run: go run ./cmd/pipeline demo --project delta-onboarding --approve --as "Ana Ruiz"

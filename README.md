@@ -80,15 +80,21 @@ no credential and no network.
 | `POST /updates/{id}/decision` with `approve:true` | yes | **yes** | yes, recorded |
 | `pipeline adk` (ADK console/web) | yes | no | no |
 
-A decision without a name of at least two characters is refused twice: by the
-web handler before it reaches the service, and by the tracker before it writes.
+`propose_update` stores a proposal file and a `proposed` audit entry so a human
+can decide on it later. It never touches project data.
+
+A decision without a name of at least two characters is refused twice: by the web
+handler before it reaches the service, and by the tracker before it writes. The
+name must also be a member of the project's team, because approving is a
+project-owner decision; the name is accountability rather than authentication, as
+[docs/missing-work.md](docs/missing-work.md) says.
 
 ## Quick start
 
 The offline path needs no credential and no network:
 
 ```bash
-go run ./cmd/pipeline demo --project delta-onboarding --approve --as "Your Name"
+go run ./cmd/pipeline demo --project delta-onboarding --approve --as "Ana Ruiz"
 ```
 
 That seeds six fixture projects into a temporary directory, runs the real ADK
@@ -154,6 +160,9 @@ gate refuses. Concretely:
   `progress_percent`, `blocked_reason`) is refused;
 - a change that would create the very contradiction the review reports — `done`
   at 40%, or 100% while in progress — is refused;
+- a change set for one milestone is decided as a unit: the gate refuses the whole
+  set when the milestone it would leave behind would contradict itself, so a
+  status travels with the reason or the progress that belongs to it;
 - more than seven ranked actions is refused;
 - if the model never submits a review, the rules' findings are shown anyway.
 

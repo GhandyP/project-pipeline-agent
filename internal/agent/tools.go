@@ -113,7 +113,7 @@ func toolConfigs() map[string]functiontool.Config {
 		},
 		ToolProposeUpdate: {
 			Name:        ToolProposeUpdate,
-			Description: "Validate a change intention set and return a dry-run update with the tracker version it was built for. It writes nothing: a human approves the update in the web app, and only then is it applied. Propose at most one change per field of one milestone.",
+			Description: "Validate a change intention set and return a dry-run update with the tracker version it was built for. It never changes the project: it stores the proposal and records it in the audit trail, so a human can decide on it later. Propose at most one change per field of one milestone, and pass the status together with the reason or the progress that belongs to it.",
 		},
 		ToolSubmitReview: {
 			Name:        ToolSubmitReview,

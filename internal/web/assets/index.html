@@ -12,7 +12,7 @@
         <h1>Pipeline review</h1>
         <p class="subtitle">
           Deterministic Go rules find the blockers. The model explains and prioritizes them.
-          <strong>Nothing is written until a named human approves.</strong>
+          <strong>No project data changes until a project member approves it.</strong>
         </p>
       </div>
       <label class="approver">
@@ -21,7 +21,8 @@
       </label>
     </header>
     <p id="approver-hint" class="hint">
-      The name is recorded on every decision. A decision without a name is refused by the API and by the tracker.
+      The name is recorded on every decision, and only a member of the project team can approve one.
+      A decision without a name is refused by the API and by the tracker.
     </p>
     <p id="status" class="banner" role="status" aria-live="polite" hidden></p>
 
@@ -45,7 +46,8 @@
         <button id="run-review" type="button" disabled>Run review</button>
         <p class="muted">
           The ADK agent reads the status, explains the blockers and proposes at most one dry-run
-          update. It has no tool that can write, so a change is only ever a proposal here.
+          update. It has no tool that can change the project, so a change is only ever a proposal
+          here, recorded in the audit trail.
         </p>
         <ol id="stream" class="stream" aria-live="polite"></ol>
         <div id="review-out"></div>

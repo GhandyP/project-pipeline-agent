@@ -268,6 +268,16 @@ func (s *Store) Apply(ctx context.Context, projectID, updateID string, approval 
 		return domain.AppliedUpdate{}, err
 	}
 
+	snapshot, err := s.Snapshot(ctx, projectID)
+	if err != nil {
+		return domain.AppliedUpdate{}, err
+	}
+	// Only a project owner may approve a change to it. This is checked before
+	// the replay branch and before anything is written.
+	if _, ok := snapshot.ApproverMember(approval.By); !ok {
+		return domain.AppliedUpdate{}, fmt.Errorf("%w: %q is not on the team of project %q", domain.ErrNotApprover, approval.By, projectID)
+	}
+
 	records, err := s.readAudit(projectID)
 	if err != nil {
 		return domain.AppliedUpdate{}, err
@@ -282,11 +292,6 @@ func (s *Store) Apply(ctx context.Context, projectID, updateID string, approval 
 			return domain.AppliedUpdate{}, fmt.Errorf("%w: update %q was %s by %s at %s",
 				ErrAlreadyDecided, updateID, record.Action, record.Approval.By, record.At.Format(time.RFC3339))
 		}
-	}
-
-	snapshot, err := s.Snapshot(ctx, projectID)
-	if err != nil {
-		return domain.AppliedUpdate{}, err
 	}
 	if err := proposal.ValidateAgainst(snapshot); err != nil {
 		return domain.AppliedUpdate{}, err
@@ -312,7 +317,11 @@ func (s *Store) Apply(ctx context.Context, projectID, updateID string, approval 
 		At:               at,
 	}
 	if err := s.appendAudit(record); err != nil {
-		return domain.AppliedUpdate{}, err
+		// The project has already been written. Reporting a plain failure here
+		// would hide a committed change, so the error says exactly what is true:
+		// the new version exists and its trail entry does not.
+		return domain.AppliedUpdate{}, fmt.Errorf("%w: project %q is at version %d and the trail entry for %s is missing: %v",
+			ports.ErrCommittedWithoutAudit, projectID, applied.Version, updateID, err)
 	}
 
 	return domain.AppliedUpdate{

@@ -26,7 +26,7 @@ func runDemo(args []string, stdin io.Reader, out io.Writer) error {
 	project := flags.String("project", "delta-onboarding", "project id to walk through")
 	fixtures := flags.String("fixtures", "", "fixture directory to seed from (default "+defaultFixtures+")")
 	dataDir := flags.String("data", "", "data directory to use (default: a temporary one, removed afterwards)")
-	as := flags.String("as", currentUser(), "name recorded on the approval")
+	as := flags.String("as", "", "name recorded on the approval (default: the first member of the project team)")
 	approve := flags.Bool("approve", false, "approve the proposed update without prompting")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -63,10 +63,24 @@ func runDemo(args []string, stdin io.Reader, out io.Writer) error {
 		return err
 	}
 
+	ctx := context.Background()
+	snapshot, err := svc.Snapshot(ctx, *project)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(*as) == "" {
+		member, ok := firstTeamMember(snapshot)
+		if !ok {
+			return fmt.Errorf("project %q has no team, so nobody can approve an update for it; add a team member first", *project)
+		}
+		*as = member
+	}
+
 	fmt.Fprintln(out, "Offline walkthrough: the scripted model, the real rules, the real tracker.")
 	fmt.Fprintln(out, "Nothing here can reach a network or a provider.")
+	fmt.Fprintf(out, "Project %s (%s) at version %d; approver %s, from the project team.\n",
+		snapshot.Name, snapshot.ProjectID, snapshot.Version, *as)
 
-	ctx := context.Background()
 	var review *domain.PipelineReview
 	if err := reviewer.Stream(ctx, *project, streamTo(out, &review)); err != nil {
 		return err
@@ -107,6 +121,21 @@ func runDemo(args []string, stdin io.Reader, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "Project %s is at version %d.\n", final.ProjectID, final.Version)
 	return printAudit(ctx, svc, *project, out)
+}
+
+// firstTeamMember is the demo's default approver. Approving is a project-owner
+// decision, so the demo names a member of the team instead of borrowing the
+// shell's user, which would be refused.
+func firstTeamMember(snapshot domain.ProjectSnapshot) (string, bool) {
+	for _, member := range snapshot.Team {
+		if name := strings.TrimSpace(member.Name); name != "" {
+			return name, true
+		}
+		if id := strings.TrimSpace(member.ID); id != "" {
+			return id, true
+		}
+	}
+	return "", false
 }
 
 // askApproval decides who answers the approval question: the flag, a terminal,

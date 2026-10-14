@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/GhandyP/project-pipeline-agent/internal/domain"
+	"github.com/GhandyP/project-pipeline-agent/internal/ports"
 )
 
 var fixedNow = time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
@@ -125,14 +126,14 @@ func TestApplyWritesOnceAndRecordsBothSteps(t *testing.T) {
 		t.Fatalf("after proposing, audit = %v, want one proposed record", got)
 	}
 
-	applied, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "ana", At: fixedNow})
+	applied, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if applied.ExpectedVersion != 11 || applied.ResultingVersion != 12 {
 		t.Errorf("versions = %d -> %d, want 11 -> 12", applied.ExpectedVersion, applied.ResultingVersion)
 	}
-	if applied.Approval.By != "ana" || !applied.AppliedAt.Equal(fixedNow) {
+	if applied.Approval.By != "Ana Ruiz" || !applied.AppliedAt.Equal(fixedNow) {
 		t.Errorf("approval = %+v, want ana at %s", applied.Approval, fixedNow)
 	}
 	if got := projectVersion(t, store, "cobalt-billing"); got != 12 {
@@ -159,7 +160,7 @@ func TestApplyWritesOnceAndRecordsBothSteps(t *testing.T) {
 		t.Fatalf("audit has %d records, want proposed + applied", len(records))
 	}
 	last := records[1]
-	if last.Action != domain.AuditApplied || last.ResultingVersion != 12 || last.Approval.By != "ana" {
+	if last.Action != domain.AuditApplied || last.ResultingVersion != 12 || last.Approval.By != "Ana Ruiz" {
 		t.Errorf("applied record = %+v", last)
 	}
 	if last.Digest == "" || !strings.HasPrefix(last.Digest, "sha256:") {
@@ -178,7 +179,7 @@ func TestApplyReplayReturnsTheRecordedOutcome(t *testing.T) {
 	store := newStore(t)
 	proposal := mustProposal(t, store, "cobalt-billing", "",
 		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
-	approval := domain.Approval{By: "ana", At: fixedNow}
+	approval := domain.Approval{By: "Ana Ruiz", At: fixedNow}
 
 	first, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, approval)
 	if err != nil {
@@ -223,7 +224,7 @@ func TestApplyRefusesAStaleProject(t *testing.T) {
 		t.Fatalf("write project: %v", err)
 	}
 
-	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "ana", At: fixedNow})
+	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow})
 	if !errors.Is(err, domain.ErrStaleVersion) {
 		t.Fatalf("error = %v, want ErrStaleVersion", err)
 	}
@@ -260,7 +261,7 @@ func TestApplyRefusesADriftedField(t *testing.T) {
 		t.Fatalf("write project: %v", err)
 	}
 
-	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "ana", At: fixedNow})
+	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow})
 	if !errors.Is(err, domain.ErrDriftedChange) {
 		t.Fatalf("error = %v, want ErrDriftedChange", err)
 	}
@@ -277,7 +278,7 @@ func TestApplyRefusesAnIncompleteApproval(t *testing.T) {
 		{name: "no name", approval: domain.Approval{At: fixedNow}},
 		{name: "one character", approval: domain.Approval{By: "a", At: fixedNow}},
 		{name: "whitespace name", approval: domain.Approval{By: "   ", At: fixedNow}},
-		{name: "no moment", approval: domain.Approval{By: "ana"}},
+		{name: "no moment", approval: domain.Approval{By: "Ana Ruiz"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -301,7 +302,7 @@ func TestApplyRefusesAnIncompleteApproval(t *testing.T) {
 
 func TestApplyRefusesAnUnknownUpdate(t *testing.T) {
 	store := newStore(t)
-	_, err := store.Apply(context.Background(), "cobalt-billing", "upd-doesnotexist", domain.Approval{By: "ana", At: fixedNow})
+	_, err := store.Apply(context.Background(), "cobalt-billing", "upd-doesnotexist", domain.Approval{By: "Ana Ruiz", At: fixedNow})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
@@ -342,7 +343,7 @@ func TestDeclineTouchesNothingAndBlocksALaterApply(t *testing.T) {
 		t.Errorf("audit = %v, want exactly two records after a replay", got)
 	}
 
-	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "ana", At: fixedNow})
+	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow})
 	if !errors.Is(err, ErrAlreadyDecided) {
 		t.Fatalf("error = %v, want ErrAlreadyDecided", err)
 	}
@@ -353,7 +354,7 @@ func TestDeclineTouchesNothingAndBlocksALaterApply(t *testing.T) {
 
 func TestApplyRefusesAnUnknownProject(t *testing.T) {
 	store := newStore(t)
-	_, err := store.Apply(context.Background(), "no-such-project", "upd-1", domain.Approval{By: "ana", At: fixedNow})
+	_, err := store.Apply(context.Background(), "no-such-project", "upd-1", domain.Approval{By: "Ana Ruiz", At: fixedNow})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
@@ -374,7 +375,7 @@ func TestIdsCannotEscapeTheStore(t *testing.T) {
 		if _, err := store.Proposal(context.Background(), "cobalt-billing", id); !errors.Is(err, ErrInvalidID) {
 			t.Errorf("Proposal(update %q) error = %v, want ErrInvalidID", id, err)
 		}
-		if _, err := store.Apply(context.Background(), "cobalt-billing", id, domain.Approval{By: "ana", At: fixedNow}); !errors.Is(err, ErrInvalidID) {
+		if _, err := store.Apply(context.Background(), "cobalt-billing", id, domain.Approval{By: "Ana Ruiz", At: fixedNow}); !errors.Is(err, ErrInvalidID) {
 			t.Errorf("Apply(update %q) error = %v, want ErrInvalidID", id, err)
 		}
 		if _, err := store.Audit(context.Background(), id); !errors.Is(err, ErrInvalidID) {
@@ -409,7 +410,7 @@ func TestNoTemporaryFilesAreLeftBehind(t *testing.T) {
 	store := newStore(t)
 	proposal := mustProposal(t, store, "cobalt-billing", "",
 		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
-	if _, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "ana", At: fixedNow}); err != nil {
+	if _, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow}); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	err := filepath.WalkDir(store.Dir(), func(path string, entry os.DirEntry, err error) error {
@@ -423,6 +424,73 @@ func TestNoTemporaryFilesAreLeftBehind(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk: %v", err)
+	}
+}
+
+// TestApplyRefusesAnApproverOutsideTheTeam is finding 2 from the independent
+// verification: a decision only counts when it comes from a project owner.
+func TestApplyRefusesAnApproverOutsideTheTeam(t *testing.T) {
+	store := newStore(t)
+	proposal := mustProposal(t, store, "cobalt-billing", "",
+		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+
+	_, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Outsider", At: fixedNow})
+	if !errors.Is(err, domain.ErrNotApprover) {
+		t.Fatalf("error = %v, want ErrNotApprover", err)
+	}
+	if got := projectVersion(t, store, "cobalt-billing"); got != 11 {
+		t.Errorf("version = %d, want the untouched 11", got)
+	}
+	if got := auditActions(t, store, "cobalt-billing"); len(got) != 1 {
+		t.Errorf("audit = %v, want only the proposed record", got)
+	}
+
+	// The same decision from a team member is accepted, by name or by id.
+	for _, by := range []string{"Ana Ruiz", "u-ana"} {
+		store := newStore(t)
+		proposal := mustProposal(t, store, "cobalt-billing", "",
+			domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+		if _, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: by, At: fixedNow}); err != nil {
+			t.Errorf("Apply as %q: %v", by, err)
+		}
+	}
+
+	// Refusing an update stays open to anybody with a name: a decline writes no
+	// project data.
+	store = newStore(t)
+	proposal = mustProposal(t, store, "cobalt-billing", "",
+		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+	if _, err := store.Decline(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Outsider", At: fixedNow}); err != nil {
+		t.Errorf("Decline by an outsider: %v", err)
+	}
+}
+
+// TestApplyReportsACommittedChangeWhenTheTrailCannotBeWritten is finding 4: a
+// failure after the project was written must never read like nothing happened.
+func TestApplyReportsACommittedChangeWhenTheTrailCannotBeWritten(t *testing.T) {
+	store := newStore(t)
+	proposal := mustProposal(t, store, "cobalt-billing", "",
+		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+
+	// The trail file exists and is readable, but it cannot be appended to.
+	auditFile := filepath.Join(store.Dir(), "audit", "cobalt-billing.jsonl")
+	if err := os.Chmod(auditFile, 0o400); err != nil {
+		t.Fatalf("make the trail read-only: %v", err)
+	}
+	defer os.Chmod(auditFile, 0o644)
+
+	_, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow})
+	if !errors.Is(err, ports.ErrCommittedWithoutAudit) {
+		t.Fatalf("error = %v, want ErrCommittedWithoutAudit", err)
+	}
+	if !strings.Contains(err.Error(), "is at version 12") {
+		t.Errorf("error = %v, want it to name the committed version", err)
+	}
+	if !strings.Contains(err.Error(), proposal.UpdateID) {
+		t.Errorf("error = %v, want it to name the update", err)
+	}
+	if got := projectVersion(t, store, "cobalt-billing"); got != 12 {
+		t.Errorf("version = %d, want the committed 12", got)
 	}
 }
 

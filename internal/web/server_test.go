@@ -202,7 +202,7 @@ func TestIndexAndAssetsAreServed(t *testing.T) {
 	if contentType := index.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
 		t.Errorf("GET / content type = %q, want text/html", contentType)
 	}
-	if !strings.Contains(index.Body.String(), "Nothing is written until a named human approves") {
+	if !strings.Contains(index.Body.String(), "No project data changes until a project member approves it") {
 		t.Error("the page does not state the approval rule")
 	}
 
@@ -557,6 +557,59 @@ func TestAStreamFailureStillEndsTheResponse(t *testing.T) {
 	}
 	if !strings.Contains(body, "event: start") {
 		t.Errorf("the stream carried no events:\n%s", body)
+	}
+}
+
+// TestAnApprovalFromOutsideTheProjectIsForbidden is finding 2 at the edge: a
+// decision from somebody who is not on the project team cannot approve.
+func TestAnApprovalFromOutsideTheProjectIsForbidden(t *testing.T) {
+	service := defaultService()
+	service.decideErr = fmt.Errorf("%w: %q is not on the team of project %q", domain.ErrNotApprover, "Outsider", "cobalt-billing")
+	server := newServer(t, service, &fakeStreamer{})
+
+	recorder := do(t, server, http.MethodPost, "/api/projects/cobalt-billing/updates/upd-abc123/decision", `{"approve":true,"by":"Outsider"}`)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "not on the team") {
+		t.Errorf("body = %s, want it to name the reason", recorder.Body.String())
+	}
+}
+
+// TestAMissingDecisionFieldIsRefused is finding 6: a body that never states the
+// decision is a mistake, not a refusal.
+func TestAMissingDecisionFieldIsRefused(t *testing.T) {
+	service := defaultService()
+	server := newServer(t, service, &fakeStreamer{})
+
+	recorder := do(t, server, http.MethodPost, "/api/projects/cobalt-billing/updates/upd-abc123/decision", `{"by":"Ana Ruiz"}`)
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(service.decisions) != 0 {
+		t.Errorf("a decision that was never stated reached the service: %+v", service.decisions)
+	}
+
+	withDecision := do(t, server, http.MethodPost, "/api/projects/cobalt-billing/updates/upd-abc123/decision", `{"approve":true,"by":"Ana Ruiz"}`)
+	if withDecision.Code != http.StatusOK {
+		t.Fatalf("status with approve present = %d, want 200: %s", withDecision.Code, withDecision.Body.String())
+	}
+}
+
+// TestACommittedChangeWithoutItsTrailEntryIsReported is finding 4 at the edge:
+// the response must not hide a change that exists.
+func TestACommittedChangeWithoutItsTrailEntryIsReported(t *testing.T) {
+	service := defaultService()
+	service.decideErr = fmt.Errorf("%w: project %q is at version 12 and the trail entry for upd-abc123 is missing: read-only file system",
+		ports.ErrCommittedWithoutAudit, "cobalt-billing")
+	server := newServer(t, service, &fakeStreamer{})
+
+	recorder := do(t, server, http.MethodPost, "/api/projects/cobalt-billing/updates/upd-abc123/decision", `{"approve":true,"by":"Ana Ruiz"}`)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "is at version 12") {
+		t.Errorf("body = %s, want it to say the change exists", recorder.Body.String())
 	}
 }
 

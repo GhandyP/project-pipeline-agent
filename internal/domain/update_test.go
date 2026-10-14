@@ -128,7 +128,7 @@ func TestProposeChangesRefusesEachInvalidIntention(t *testing.T) {
 		{
 			name:    "an empty blocked reason",
 			change:  ModelChange{MilestoneID: "m-1", Field: "blocked_reason", Value: "  "},
-			wantErr: "blocked_reason is empty",
+			wantErr: `blocked_reason already holds ""`,
 		},
 	}
 
@@ -170,19 +170,28 @@ func TestProposeChangesRefusesUpdatesToAClosedMilestone(t *testing.T) {
 }
 
 // TestProposeChangesKeepsValidChangesAndReportsTheRest proves the gate is
-// per-intention: one bad change never discards a valid one.
+// per-intention across milestones: one bad change never discards a valid one,
+// while a change set for a single milestone is decided as a unit.
 func TestProposeChangesKeepsValidChangesAndReportsTheRest(t *testing.T) {
 	snapshot := testSnapshot(t)
 	proposal, rejections, err := ProposeChanges(snapshot, referenceNow, "", []ModelChange{
 		{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"},
 		{MilestoneID: "m-2", Field: "budget", Value: "1000"},
 		{MilestoneID: "m-2", Field: "owner_id", Value: "u-luis"},
+		{MilestoneID: "m-1", Field: "due_date", Value: "2026-11-01"},
 	})
 	if err != nil {
 		t.Fatalf("ProposeChanges: %v", err)
 	}
-	if len(proposal.Changes) != 1 || proposal.Changes[0].After != "u-sofia" {
-		t.Fatalf("changes = %+v, want only the first owner change", proposal.Changes)
+	if len(proposal.Changes) != 2 {
+		t.Fatalf("changes = %+v, want the two valid ones", proposal.Changes)
+	}
+	// The canonical order sorts milestones first.
+	if proposal.Changes[0].MilestoneID != "m-1" || proposal.Changes[0].Field != FieldDueDate {
+		t.Errorf("first change = %+v, want m-1 due_date", proposal.Changes[0])
+	}
+	if proposal.Changes[1].MilestoneID != "m-2" || proposal.Changes[1].After != "u-sofia" {
+		t.Errorf("second change = %+v, want the first owner change of m-2", proposal.Changes[1])
 	}
 	if len(rejections) != 2 {
 		t.Fatalf("rejections = %+v, want two", rejections)
@@ -232,7 +241,13 @@ func TestUpdateIDDependsOnTheMutationOnly(t *testing.T) {
 		t.Errorf("update ids differ for the same mutation: %q vs %q", first.UpdateID, second.UpdateID)
 	}
 
-	other, _ := mustPropose(t, snapshot, "other owner", ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"}, ModelChange{MilestoneID: "m-1", Field: "status", Value: "blocked"})
+	other, otherRejections := mustPropose(t, snapshot, "other owner",
+		ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"},
+		ModelChange{MilestoneID: "m-1", Field: "status", Value: "blocked"},
+		ModelChange{MilestoneID: "m-1", Field: "blocked_reason", Value: "waiting on the vendor"})
+	if len(otherRejections) != 0 {
+		t.Fatalf("the larger change set was refused: %+v", otherRejections)
+	}
 	if other.UpdateID == first.UpdateID {
 		t.Error("a larger change set produced the same update id")
 	}

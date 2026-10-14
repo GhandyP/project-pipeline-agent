@@ -27,17 +27,20 @@ Written to be read before trusting the demo with anything that matters.
    *Next step:* a session service backed by the store, and persisting the review
    next to the proposal it produced.
 
-5. **`blocked_reason` is only valid on a blocked milestone.** Blocking a
-   milestone and stating why must be one update, in that field order, which the
-   canonical order guarantees. A behaviour that silently accepted half the pair
-   would recreate the contradiction the rules report.
+5. **A change set for one milestone is decided as a unit.** The gate applies
+   every admissible change of a milestone together and then refuses the whole set
+   if the milestone it would leave behind contradicts itself. That keeps a status
+   with its reason or its progress, and it means a valid change is lost when it
+   travels with an invalid one for the same milestone. The refusal names every
+   change in the set, so the next attempt can be exact.
 
 ## Security and operations
 
 6. **No authentication.** This is a single-user local app: it binds to
    `127.0.0.1` by default and anyone who can reach the port can read every
-   project and approve an update by typing any name. The approver name is
-   accountability, not identity.
+   project. Approving requires the name of a member of that project's team, which
+   stops an accidental or arbitrary approval, but nothing proves who typed it: the
+   name is accountability, not identity.
    *Next step:* an identity provider in front, and a per-project role check
    before the decision endpoint.
 

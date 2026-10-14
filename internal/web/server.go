@@ -334,7 +334,9 @@ func (s *Server) handlePropose(w http.ResponseWriter, r *http.Request) {
 }
 
 type decisionRequest struct {
-	Approve bool   `json:"approve"`
+	// Approve is a pointer so a body that never states the decision is refused
+	// instead of silently becoming a refusal.
+	Approve *bool  `json:"approve"`
 	By      string `json:"by"`
 	Note    string `json:"note"`
 }
@@ -346,6 +348,10 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 	}
 	var body decisionRequest
 	if !s.decode(w, r, &body) {
+		return
+	}
+	if body.Approve == nil {
+		s.writeError(w, http.StatusUnprocessableEntity, "the decision must state approve true or false", nil)
 		return
 	}
 	// The approval gate is checked here as well as inside the service, so an
@@ -360,7 +366,7 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	applied, record, err := s.service.Decide(ctx, projectID, updateID, service.Decision{
-		Approved: body.Approve,
+		Approved: *body.Approve,
 		By:       approval.By,
 		Note:     approval.Note,
 	})
@@ -368,7 +374,7 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if body.Approve {
+	if *body.Approve {
 		s.writeJSON(w, http.StatusOK, map[string]any{"applied": applied})
 		return
 	}
@@ -464,6 +470,12 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		s.writeError(w, http.StatusNotFound, "no such project or update", nil)
 	case errors.Is(err, ports.ErrInvalidID):
 		s.writeError(w, http.StatusNotFound, "no such project or update", nil)
+	case errors.Is(err, domain.ErrNotApprover):
+		s.writeError(w, http.StatusForbidden, err.Error(), nil)
+	case errors.Is(err, ports.ErrCommittedWithoutAudit):
+		// The change exists. Answering with a generic failure would hide a
+		// committed write, so the client is told exactly what happened.
+		s.writeError(w, http.StatusInternalServerError, err.Error(), nil)
 	case errors.Is(err, domain.ErrStaleVersion):
 		s.writeError(w, http.StatusConflict, err.Error(), nil)
 	case errors.Is(err, domain.ErrDriftedChange):

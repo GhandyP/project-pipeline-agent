@@ -18,6 +18,10 @@ var (
 	ErrNotFound = errors.New("ports: not found")
 	// ErrInvalidID reports an id that is refused before it reaches storage.
 	ErrInvalidID = errors.New("ports: invalid id")
+	// ErrCommittedWithoutAudit reports the one case the storage contract cannot
+	// make atomic: the project was written and the trail entry was not. A caller
+	// must never report this as a plain failure, because the change exists.
+	ErrCommittedWithoutAudit = errors.New("ports: the project was committed but the audit record was not written")
 )
 
 // Clock is the only place the pipeline reads the current time. Injecting it

@@ -9,6 +9,7 @@ const state = {
   snapshot: null,
   findings: null,
   review: null,
+  streamFailed: false,
 };
 
 const CHANGE_FIELDS = ["owner_id", "status", "due_date", "progress_percent", "blocked_reason"];
@@ -167,7 +168,7 @@ function renderReview(review) {
         el("p", { class: "evidence", text: rejection.reason }),
       ]))));
   }
-  out.append(el("p", { class: "muted", text: `Findings come from version ${review.findings.version} of the project. Nothing here has been written.` }));
+  out.append(el("p", { class: "muted", text: `Findings come from version ${review.findings.version} of the project. No project data was written; any proposal above is recorded in the audit trail.` }));
 }
 
 function changeTable(proposal) {
@@ -329,6 +330,7 @@ function handleSSE(raw) {
     renderProposals(payload.review.proposals || [], "proposed by the agent");
   }
   if (event === "error") {
+    state.streamFailed = true;
     setStatus(payload.error || "the review failed", "error");
   }
 }
@@ -336,6 +338,7 @@ function handleSSE(raw) {
 async function runReview() {
   if (!state.selected) return;
   clear($("stream"));
+  state.streamFailed = false;
   $("run-review").disabled = true;
   setStatus(`Running the agent review of ${state.selected}.`);
   try {
@@ -359,7 +362,13 @@ async function runReview() {
         boundary = buffer.indexOf("\n\n");
       }
     }
-    setStatus("Review finished. Nothing was written.", "ok");
+    if (state.streamFailed) {
+      // The stream carried an error event: the run did not produce a review,
+      // so the last word stays the error.
+      setStatus("The review stopped with an error. No project data was written.", "error");
+    } else {
+      setStatus("Review finished. No project data was written.", "ok");
+    }
   } catch (error) {
     setStatus(error.message, "error");
   } finally {

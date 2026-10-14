@@ -181,7 +181,8 @@ func TestInstructionStatesTheSafetyRule(t *testing.T) {
 	for _, want := range []string{
 		"never change a project",
 		"dry-run",
-		"writes nothing",
+		"never changes the project: it stores the proposal and an audit entry",
+		"No tool you can call applies anything",
 		"deterministic",
 		"blocker id",
 		"Never claim that a change was applied",

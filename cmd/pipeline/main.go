@@ -205,13 +205,3 @@ func flagSet(name string, out io.Writer) *flag.FlagSet {
 	set.SetOutput(out)
 	return set
 }
-
-// currentUser is the name recorded on an approval when the caller gives none.
-// It is a convenience, never a default that could approve something by itself:
-// every path that writes requires a name of at least two characters.
-func currentUser() string {
-	if user := strings.TrimSpace(os.Getenv("USER")); user != "" {
-		return user
-	}
-	return "interactive"
-}

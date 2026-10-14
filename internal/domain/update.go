@@ -23,6 +23,10 @@ var (
 	ErrDriftedChange = errors.New("domain: the proposed change no longer matches the project")
 	// ErrAlreadyApplied means the idempotency ledger already recorded this id.
 	ErrAlreadyApplied = errors.New("domain: this update was already recorded")
+	// ErrNotApprover means the decision came from somebody who is not on the
+	// project team. Only a project owner may approve a tracker update; anybody
+	// with a name may refuse one.
+	ErrNotApprover = errors.New("domain: the approver is not on the project team")
 )
 
 // ChangeField is a tracker field a review may propose changing. The list is a
@@ -266,10 +270,12 @@ func ProposeChanges(snapshot ProjectSnapshot, now time.Time, rationale string, r
 		sort.SliceStable(batch, func(i, j int) bool { return changeFieldOrder(batch[i].Field) < changeFieldOrder(batch[j].Field) })
 
 		simulated := milestone
+		accepted := make([]Change, 0, len(batch))
+		batchRejections := make([]Rejection, 0)
 		for _, change := range batch {
 			key := milestoneID + "/" + string(change.Field)
 			if seenField[key] {
-				rejections = append(rejections, Rejection{
+				batchRejections = append(batchRejections, Rejection{
 					Kind:    "change",
 					Subject: subjectOf(change),
 					Reason:  "the same field is proposed twice for one milestone",
@@ -278,14 +284,36 @@ func ProposeChanges(snapshot ProjectSnapshot, now time.Time, rationale string, r
 			}
 			applied, err := validateChange(snapshot, simulated, now, change)
 			if err != nil {
-				rejections = append(rejections, Rejection{Kind: "change", Subject: subjectOf(change), Reason: err.Error()})
+				batchRejections = append(batchRejections, Rejection{Kind: "change", Subject: subjectOf(change), Reason: err.Error()})
 				continue
 			}
-			seenField[key] = true
-			changes = append(changes, applied)
 			if err := applyChange(&simulated, applied); err != nil {
 				return ProposedUpdate{}, rejections, err
 			}
+			seenField[key] = true
+			accepted = append(accepted, applied)
+		}
+
+		// The gate reasons about the milestone the batch would leave behind, not
+		// about one field in isolation: a status and the reason or the progress
+		// that belongs to it can travel together, and half of a pair is refused
+		// with the reason that says so.
+		if len(accepted) > 0 {
+			if err := consistentMilestone(simulated); err != nil {
+				for _, change := range accepted {
+					batchRejections = append(batchRejections, Rejection{
+						Kind:    "change",
+						Subject: change.MilestoneID + "/" + string(change.Field),
+						Reason:  err.Error(),
+					})
+				}
+				rejections = append(rejections, batchRejections...)
+				continue
+			}
+		}
+		rejections = append(rejections, batchRejections...)
+		for _, change := range accepted {
+			changes = append(changes, change)
 		}
 	}
 
@@ -303,6 +331,24 @@ func ProposeChanges(snapshot ProjectSnapshot, now time.Time, rationale string, r
 	}
 	proposal.UpdateID = updateID(proposal)
 	return proposal, rejections, nil
+}
+
+// consistentMilestone reports whether a milestone that a change set would leave
+// behind contradicts itself. It is checked once per batch, after every change
+// in it has been applied, so a status and the reason or the progress that
+// belongs to it can be proposed together while half of a pair is refused.
+func consistentMilestone(m Milestone) error {
+	switch {
+	case m.Status == StatusBlocked && strings.TrimSpace(m.BlockedReason) == "":
+		return errors.New("status blocked needs a blocked_reason in the same update")
+	case m.Status != StatusBlocked && strings.TrimSpace(m.BlockedReason) != "":
+		return fmt.Errorf("blocked_reason %q only belongs on a blocked milestone, which is %s; clear it in the same update", m.BlockedReason, m.Status)
+	case m.Status == StatusDone && m.ProgressPercent != 100:
+		return fmt.Errorf("status done would contradict progress_percent=%d", m.ProgressPercent)
+	case m.Status != StatusDone && m.ProgressPercent >= 100:
+		return fmt.Errorf("progress_percent %d contradicts status %s", m.ProgressPercent, m.Status)
+	}
+	return nil
 }
 
 // validateChange admits one intention and renders it as a Change with its
@@ -329,12 +375,6 @@ func validateChange(snapshot ProjectSnapshot, simulated Milestone, now time.Time
 		if !status.Valid() {
 			return Change{}, fmt.Errorf("status %q is not one of planned, in_progress, blocked, done, cancelled", after)
 		}
-		if status == StatusDone && simulated.ProgressPercent != 100 {
-			return Change{}, fmt.Errorf("status done would contradict progress_percent=%d", simulated.ProgressPercent)
-		}
-		if status != StatusDone && simulated.ProgressPercent >= 100 {
-			return Change{}, fmt.Errorf("status %s would contradict progress_percent=%d", status, simulated.ProgressPercent)
-		}
 
 	case FieldDueDate:
 		due, err := parseDate(after)
@@ -353,17 +393,11 @@ func validateChange(snapshot ProjectSnapshot, simulated Milestone, now time.Time
 		if percent < 0 || percent > 100 {
 			return Change{}, fmt.Errorf("progress_percent %d is outside 0..100", percent)
 		}
-		if (percent == 100) != (simulated.Status == StatusDone) {
-			return Change{}, fmt.Errorf("progress_percent %d contradicts status %s", percent, simulated.Status)
-		}
 
 	case FieldBlockedReason:
-		if after == "" {
-			return Change{}, errors.New("blocked_reason is empty; a blank reason is not a change")
-		}
-		if simulated.Status != StatusBlocked {
-			return Change{}, fmt.Errorf("a blocked reason only belongs on a blocked milestone, which is %s", simulated.Status)
-		}
+		// An empty reason is how a milestone stops being blocked; whether the
+		// batch leaves a consistent milestone is decided once, after every
+		// change in it has been applied.
 	}
 
 	if before == after {
