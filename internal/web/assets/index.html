@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pipeline review</title>
+    <link rel="stylesheet" href="/assets/app.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Pipeline review</h1>
+        <p class="subtitle">
+          Deterministic Go rules find the blockers. The model explains and prioritizes them.
+          <strong>Nothing is written until a named human approves.</strong>
+        </p>
+      </div>
+      <label class="approver">
+        <span>Approver</span>
+        <input id="approver" type="text" autocomplete="name" placeholder="your name" aria-describedby="approver-hint">
+      </label>
+    </header>
+    <p id="approver-hint" class="hint">
+      The name is recorded on every decision. A decision without a name is refused by the API and by the tracker.
+    </p>
+    <p id="status" class="banner" role="status" aria-live="polite" hidden></p>
+
+    <main class="layout">
+      <section class="panel" aria-labelledby="projects-title">
+        <h2 id="projects-title">Projects</h2>
+        <ul id="project-list" class="list"></ul>
+      </section>
+
+      <section class="panel wide" aria-labelledby="snapshot-title">
+        <h2 id="snapshot-title">Snapshot</h2>
+        <p id="snapshot-meta" class="muted"></p>
+        <div id="milestones"></div>
+        <h3>Findings</h3>
+        <p class="muted">Severity, owner state and evidence come from the rules, never from the model.</p>
+        <ul id="findings" class="findings"></ul>
+      </section>
+
+      <section class="panel wide" aria-labelledby="review-title">
+        <h2 id="review-title">Agent review</h2>
+        <button id="run-review" type="button" disabled>Run review</button>
+        <p class="muted">
+          The ADK agent reads the status, explains the blockers and proposes at most one dry-run
+          update. It has no tool that can write, so a change is only ever a proposal here.
+        </p>
+        <ol id="stream" class="stream" aria-live="polite"></ol>
+        <div id="review-out"></div>
+      </section>
+
+      <section class="panel wide" aria-labelledby="proposals-title">
+        <h2 id="proposals-title">Proposed updates</h2>
+        <p class="muted">
+          Every proposal carries the tracker version it was built against. The tracker re-checks it
+          when you decide, so a project that moved is refused instead of overwritten.
+        </p>
+        <div id="proposals"></div>
+        <details class="manual">
+          <summary>Propose an update myself</summary>
+          <form id="manual-propose" class="manual-form">
+            <label>
+              <span>Milestone</span>
+              <select id="manual-milestone"></select>
+            </label>
+            <label>
+              <span>Field</span>
+              <select id="manual-field"></select>
+            </label>
+            <label>
+              <span>Value</span>
+              <input id="manual-value" type="text" required>
+            </label>
+            <label class="grow">
+              <span>Rationale</span>
+              <input id="manual-rationale" type="text" placeholder="one sentence a reviewer will read">
+            </label>
+            <button type="submit">Propose dry run</button>
+          </form>
+          <p class="muted">
+            Allowed fields: owner_id (a project team member), status, due_date (YYYY-MM-DD),
+            progress_percent, blocked_reason (only on a blocked milestone).
+          </p>
+        </details>
+      </section>
+
+      <section class="panel wide" aria-labelledby="audit-title">
+        <h2 id="audit-title">Audit trail</h2>
+        <ul id="audit" class="audit"></ul>
+      </section>
+    </main>
+
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
