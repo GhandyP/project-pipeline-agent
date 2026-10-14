@@ -26,13 +26,15 @@ import (
 	"github.com/GhandyP/project-pipeline-agent/internal/ports"
 )
 
-// Errors a caller can tell apart without reading a message.
+// Errors a caller can tell apart without reading a message. The first two are
+// the boundary's own sentinels, re-exported so the store and its callers agree
+// on one value.
 var (
 	// ErrNotFound means the project, proposal or update does not exist.
-	ErrNotFound = errors.New("tracker: not found")
+	ErrNotFound = ports.ErrNotFound
 	// ErrInvalidID means an id could escape the store directory, so it is
 	// refused before it reaches the filesystem.
-	ErrInvalidID = errors.New("tracker: invalid id")
+	ErrInvalidID = ports.ErrInvalidID
 	// ErrAlreadyDecided means the update id already has a decision recorded.
 	ErrAlreadyDecided = errors.New("tracker: the update was already decided")
 )

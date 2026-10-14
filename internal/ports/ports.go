@@ -5,9 +5,19 @@ package ports
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/GhandyP/project-pipeline-agent/internal/domain"
+)
+
+// Errors the boundary shares with its callers, so a handler can answer "not
+// found" without importing the adapter that produced it.
+var (
+	// ErrNotFound reports a project, a proposal or an update that does not exist.
+	ErrNotFound = errors.New("ports: not found")
+	// ErrInvalidID reports an id that is refused before it reaches storage.
+	ErrInvalidID = errors.New("ports: invalid id")
 )
 
 // Clock is the only place the pipeline reads the current time. Injecting it
