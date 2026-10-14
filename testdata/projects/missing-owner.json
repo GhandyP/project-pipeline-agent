@@ -1,0 +1,23 @@
+{
+  "project_id": "delta-onboarding",
+  "name": "Delta customer onboarding",
+  "version": 3,
+  "updated_at": "2026-10-07T12:00:00Z",
+  "team": [
+    {"id": "u-ana", "name": "Ana Ruiz"},
+    {"id": "u-sofia", "name": "Sofia Marin"}
+  ],
+  "milestones": [
+    {
+      "id": "m-1",
+      "name": "KyB document checklist",
+      "status": "in_progress",
+      "owner": {"id": "", "name": ""},
+      "due_date": "2026-11-01T00:00:00Z",
+      "progress_percent": 30,
+      "last_update_at": "2026-10-12T08:15:00Z",
+      "last_update": "Checklist drafted; nobody owns the sign-off yet."
+    }
+  ],
+  "risks": []
+}

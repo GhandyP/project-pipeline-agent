@@ -1,0 +1,23 @@
+{
+  "project_id": "borealis-migration",
+  "name": "Borealis data migration",
+  "version": 4,
+  "updated_at": "2026-10-08T14:30:00Z",
+  "team": [
+    {"id": "u-ana", "name": "Ana Ruiz"},
+    {"id": "u-luis", "name": "Luis Prado"}
+  ],
+  "milestones": [
+    {
+      "id": "m-1",
+      "name": "Legacy schema freeze",
+      "status": "planned",
+      "owner": {"id": "u-ana", "name": "Ana Ruiz"},
+      "due_date": "2026-09-01T00:00:00Z",
+      "progress_percent": 0,
+      "last_update_at": "2026-10-11T10:00:00Z",
+      "last_update": "Waiting for the DBA review window."
+    }
+  ],
+  "risks": []
+}

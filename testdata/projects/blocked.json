@@ -1,0 +1,35 @@
+{
+  "project_id": "cobalt-billing",
+  "name": "Cobalt billing split",
+  "version": 11,
+  "updated_at": "2026-10-09T07:45:00Z",
+  "team": [
+    {"id": "u-ana", "name": "Ana Ruiz"},
+    {"id": "u-luis", "name": "Luis Prado"},
+    {"id": "u-sofia", "name": "Sofia Marin"}
+  ],
+  "milestones": [
+    {
+      "id": "m-1",
+      "name": "Invoice numbering service",
+      "status": "in_progress",
+      "owner": {"id": "u-luis", "name": "Luis Prado"},
+      "due_date": "2026-10-01T00:00:00Z",
+      "progress_percent": 60,
+      "last_update_at": "2026-10-13T09:30:00Z",
+      "last_update": "Numbering table created; API wiring in progress."
+    },
+    {
+      "id": "m-2",
+      "name": "Billing console cutover",
+      "status": "in_progress",
+      "owner": {"id": "u-ana", "name": "Ana Ruiz"},
+      "due_date": "2026-11-15T00:00:00Z",
+      "progress_percent": 20,
+      "depends_on": ["m-1"],
+      "last_update_at": "2026-10-12T17:00:00Z",
+      "last_update": "Console branches prepared; waiting on numbering."
+    }
+  ],
+  "risks": []
+}

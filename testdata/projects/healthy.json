@@ -1,0 +1,76 @@
+{
+  "project_id": "atlas-checkout",
+  "name": "Atlas checkout revamp",
+  "version": 7,
+  "updated_at": "2026-10-10T09:00:00Z",
+  "team": [
+    {
+      "id": "u-ana",
+      "name": "Ana Ruiz"
+    },
+    {
+      "id": "u-luis",
+      "name": "Luis Prado"
+    },
+    {
+      "id": "u-sofia",
+      "name": "Sofia Marin"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m-1",
+      "name": "Payment provider selection",
+      "status": "done",
+      "owner": {
+        "id": "u-ana",
+        "name": "Ana Ruiz"
+      },
+      "due_date": "2026-09-15T00:00:00Z",
+      "progress_percent": 100,
+      "last_update_at": "2026-09-14T16:20:00Z",
+      "last_update": "Provider signed; contract archived."
+    },
+    {
+      "id": "m-2",
+      "name": "Checkout UI rework",
+      "status": "in_progress",
+      "owner": {
+        "id": "u-luis",
+        "name": "Luis Prado"
+      },
+      "due_date": "2026-11-20T00:00:00Z",
+      "progress_percent": 45,
+      "depends_on": [
+        "m-1"
+      ],
+      "last_update_at": "2026-10-12T11:05:00Z",
+      "last_update": "Form steps merged; accessibility pass pending."
+    },
+    {
+      "id": "m-3",
+      "name": "Load test at 3x peak",
+      "status": "planned",
+      "owner": {
+        "id": "u-sofia",
+        "name": "Sofia Marin"
+      },
+      "due_date": "2026-12-05T00:00:00Z",
+      "progress_percent": 0,
+      "last_update_at": "2026-10-09T08:00:00Z",
+      "last_update": "Scenarios drafted."
+    }
+  ],
+  "risks": [
+    {
+      "id": "r-1",
+      "description": "Provider sandbox rate limits",
+      "severity": "low",
+      "owner": {
+        "id": "u-ana",
+        "name": "Ana Ruiz"
+      },
+      "raised_at": "2026-09-01T00:00:00Z"
+    }
+  ]
+}

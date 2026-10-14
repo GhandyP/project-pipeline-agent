@@ -1,0 +1,28 @@
+# Credentials and secrets — never commit these
+.env
+.env.*
+env.local
+*.key
+credentials.json
+client_secret*.json
+token.json
+
+# Local project data created by the demo and the web app
+/data/
+/pipeline
+/bin/
+/dist/
+*.exe
+
+# Test and coverage artifacts
+*.out
+coverage.html
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ODD working log: kept locally as the authoritative record, never published.
+odd/
