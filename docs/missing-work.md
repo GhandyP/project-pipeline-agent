@@ -38,11 +38,15 @@ Written to be read before trusting the demo with anything that matters.
 
 6. **No authentication.** This is a single-user local app: it binds to
    `127.0.0.1` by default and anyone who can reach the port can read every
-   project. Approving requires the name of a member of that project's team, which
-   stops an accidental or arbitrary approval, but nothing proves who typed it: the
-   name is accountability, not identity.
-   *Next step:* an identity provider in front, and a per-project role check
-   before the decision endpoint.
+   project. Approval requires `owner_id` to identify a member of the project's
+   roster, and the submitted full name or id must match that configured owner.
+   This is a roster-backed role check, not proof of who typed the name: the name
+   is accountability, not identity. Older snapshots without a valid `owner_id`
+   remain readable, reviewable and proposable, but approval fails closed until an
+   operator sets the owner explicitly; there is no automatic migration or
+   first-member fallback.
+   *Next step:* authenticate the caller and bind the authenticated principal to
+   the configured project owner before the decision endpoint.
 
 7. **No transport security.** `serve` speaks plain HTTP.
    *Next step:* terminate TLS in front, or serve HTTPS directly.

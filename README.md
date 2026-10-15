@@ -7,8 +7,8 @@ Deterministic Go rules derive what is wrong with a project — severity, owner
 state and evidence included. A Gemini agent reads that verdict, explains it,
 rank-orders the next actions and proposes at most one dry-run update. **No tool
 the agent can call writes anything.** A tracker change happens only after a
-named human approves the exact change set, and the tracker re-checks the project
-before it writes.
+configured project owner approves the exact change set, and the tracker re-checks
+the project before it writes.
 
 ## Why this exists
 
@@ -40,7 +40,7 @@ snapshot ──► rules (pure Go) ──► findings ──► agent explains +
    │                                              ▼
    │                                       dry-run proposal
    │                                              │
-   └────────────── tracker ◄──── named human approval ──┘
+   └────────────── tracker ◄── configured owner approval ─┘
                    (version check + idempotency + audit trail)
 ```
 
@@ -83,11 +83,15 @@ no credential and no network.
 `propose_update` stores a proposal file and a `proposed` audit entry so a human
 can decide on it later. It never touches project data.
 
-A decision without a name of at least two characters is refused twice: by the web
-handler before it reaches the service, and by the tracker before it writes. The
-name must also be a member of the project's team, because approving is a
-project-owner decision; the name is accountability rather than authentication, as
-[docs/missing-work.md](docs/missing-work.md) says.
+A decision without a name of at least two characters is refused by the web handler;
+the tracker independently checks approval authority before it writes. The project's
+`owner_id` must identify a team member, and only that owner's full name or id (case
+and repeated-space normalized) may approve. Other team members and outsiders receive
+`403`. A missing or unrecognized `owner_id` fails closed for approval, while the
+snapshot remains readable, reviewable and proposable; an operator must set the owner
+explicitly, with no implicit fallback or automatic migration. The submitted name is
+accountability rather than authentication, as [docs/missing-work.md](docs/missing-work.md)
+says.
 
 ## Quick start
 
@@ -180,7 +184,8 @@ gate refuses. Concretely:
 
 Project and update ids must match `^[A-Za-z0-9_-]{1,64}$`; a request body is
 capped at 64 KiB; a conflict (a project that moved, or an update already decided)
-answers `409`; an anonymous approver answers `422`.
+answers `409`; an anonymous approver answers `422`; a non-owner or a project without
+a roster-backed owner answers `403`.
 
 ## Tests
 

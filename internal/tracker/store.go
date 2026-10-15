@@ -275,7 +275,7 @@ func (s *Store) Apply(ctx context.Context, projectID, updateID string, approval 
 	// Only a project owner may approve a change to it. This is checked before
 	// the replay branch and before anything is written.
 	if _, ok := snapshot.ApproverMember(approval.By); !ok {
-		return domain.AppliedUpdate{}, fmt.Errorf("%w: %q is not on the team of project %q", domain.ErrNotApprover, approval.By, projectID)
+		return domain.AppliedUpdate{}, fmt.Errorf("%w: %q is not the configured project owner for project %q", domain.ErrNotApprover, approval.By, projectID)
 	}
 
 	records, err := s.readAudit(projectID)

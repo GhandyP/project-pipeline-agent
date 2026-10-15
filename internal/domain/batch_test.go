@@ -140,10 +140,10 @@ func TestProposeChangesRefusesADoneStatusThatStaysAtFortyPercent(t *testing.T) {
 	}
 }
 
-// TestApproverMemberMatchesAWholeNameOrAnID pins who may approve: a member of
-// the project team, by full name or by id, and nobody else.
-func TestApproverMemberMatchesAWholeNameOrAnID(t *testing.T) {
-	snapshot := testSnapshot(t) // team: Ana Ruiz, Luis Prado, Sofia Marin
+// TestApproverMemberMatchesOnlyTheConfiguredOwner pins owner-only approval:
+// the project's roster-backed owner may use their full name or id, nobody else.
+func TestApproverMemberMatchesOnlyTheConfiguredOwner(t *testing.T) {
+	snapshot := testSnapshot(t) // owner: Ana Ruiz (u-ana); team also has Luis and Sofia
 
 	cases := []struct {
 		name   string
@@ -153,7 +153,10 @@ func TestApproverMemberMatchesAWholeNameOrAnID(t *testing.T) {
 		{name: "Ana Ruiz", wantID: "u-ana", wantOK: true},
 		{name: "  ana   ruiz  ", wantID: "u-ana", wantOK: true},
 		{name: "u-ana", wantID: "u-ana", wantOK: true},
-		{name: "SOFIA MARIN", wantID: "u-sofia", wantOK: true},
+		{name: "U-ANA", wantID: "u-ana", wantOK: true},
+		{name: "SOFIA MARIN", wantOK: false},
+		{name: "u-sofia", wantOK: false},
+		{name: "Luis Prado", wantOK: false},
 		{name: "Ana", wantOK: false},
 		{name: "u-outsider", wantOK: false},
 		{name: "Ana Ruiz (contractor)", wantOK: false},
@@ -180,6 +183,27 @@ func TestApproverMemberMatchesAWholeNameOrAnID(t *testing.T) {
 	empty := loadFixture(t, "empty")
 	if _, ok := empty.ApproverMember("Ana Ruiz"); ok {
 		t.Error("a project with no team accepted an approver")
+	}
+}
+
+func TestApproverRequiresARecognizedConfiguredOwner(t *testing.T) {
+	snapshot := testSnapshot(t)
+	for _, tc := range []struct {
+		name    string
+		ownerID string
+	}{
+		{name: "missing", ownerID: ""},
+		{name: "not on the roster", ownerID: "u-not-on-team"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withoutOwner := snapshot
+			withoutOwner.OwnerID = tc.ownerID
+			for _, by := range []string{"Ana Ruiz", "u-ana"} {
+				if member, ok := withoutOwner.ApproverMember(by); ok {
+					t.Errorf("owner_id %q accepted %q as %+v", tc.ownerID, by, member)
+				}
+			}
+		})
 	}
 }
 

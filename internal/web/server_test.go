@@ -202,8 +202,11 @@ func TestIndexAndAssetsAreServed(t *testing.T) {
 	if contentType := index.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
 		t.Errorf("GET / content type = %q, want text/html", contentType)
 	}
-	if !strings.Contains(index.Body.String(), "No project data changes until a project member approves it") {
-		t.Error("the page does not state the approval rule")
+	if !strings.Contains(index.Body.String(), "No project data changes until the configured project owner approves them.") {
+		t.Error("the page does not state the owner-only approval rule")
+	}
+	if !strings.Contains(index.Body.String(), "only the configured project owner can approve changes") {
+		t.Error("the approval hint does not identify the configured project owner")
 	}
 
 	css := do(t, server, http.MethodGet, "/assets/app.css", "")
@@ -560,19 +563,19 @@ func TestAStreamFailureStillEndsTheResponse(t *testing.T) {
 	}
 }
 
-// TestAnApprovalFromOutsideTheProjectIsForbidden is finding 2 at the edge: a
-// decision from somebody who is not on the project team cannot approve.
+// TestAnApprovalFromOutsideTheProjectIsForbidden verifies that a decision the
+// service rejects for lack of project-owner authority is surfaced as forbidden.
 func TestAnApprovalFromOutsideTheProjectIsForbidden(t *testing.T) {
 	service := defaultService()
-	service.decideErr = fmt.Errorf("%w: %q is not on the team of project %q", domain.ErrNotApprover, "Outsider", "cobalt-billing")
+	service.decideErr = fmt.Errorf("%w: %q is not the configured project owner for project %q", domain.ErrNotApprover, "Outsider", "cobalt-billing")
 	server := newServer(t, service, &fakeStreamer{})
 
 	recorder := do(t, server, http.MethodPost, "/api/projects/cobalt-billing/updates/upd-abc123/decision", `{"approve":true,"by":"Outsider"}`)
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403: %s", recorder.Code, recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "not on the team") {
-		t.Errorf("body = %s, want it to name the reason", recorder.Body.String())
+	if !strings.Contains(recorder.Body.String(), "project owner") {
+		t.Errorf("body = %s, want it to name the project-owner requirement", recorder.Body.String())
 	}
 }
 

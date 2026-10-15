@@ -3,8 +3,8 @@
 //
 // The interface is the place where the human decision happens. The API can
 // propose a dry run and it can record a decision, but it cannot approve one on
-// its own: a decision carries the name of the person who made it, and the
-// tracker re-checks the project before it writes anything (S9, S13).
+// its own: a decision carries the configured owner's name or id, and the tracker
+// re-checks that roster-backed authority before it writes anything (S9, S13).
 package web
 
 import (
@@ -471,7 +471,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ports.ErrInvalidID):
 		s.writeError(w, http.StatusNotFound, "no such project or update", nil)
 	case errors.Is(err, domain.ErrNotApprover):
-		s.writeError(w, http.StatusForbidden, err.Error(), nil)
+		s.writeError(w, http.StatusForbidden, "only the configured project owner may approve this update", nil)
 	case errors.Is(err, ports.ErrCommittedWithoutAudit):
 		// The change exists. Answering with a generic failure would hide a
 		// committed write, so the client is told exactly what happened.

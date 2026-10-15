@@ -132,6 +132,7 @@ type Risk struct {
 type ProjectSnapshot struct {
 	ProjectID  string      `json:"project_id"`
 	Name       string      `json:"name"`
+	OwnerID    string      `json:"owner_id"` // May be empty on historical snapshots; approvals then fail closed.
 	Version    int64       `json:"version"`
 	UpdatedAt  time.Time   `json:"updated_at"`
 	Team       []Owner     `json:"team"`
@@ -159,22 +160,45 @@ func (s ProjectSnapshot) TeamMember(id string) (Owner, bool) {
 	return Owner{}, false
 }
 
-// ApproverMember reports whether a name identifies a member of the project
-// team. The match accepts the member id or the full name, ignoring case and
-// repeated spaces, because a human types it.
-//
-// Only a project owner may approve a tracker update. The name is accountability,
-// not authentication: nothing here proves who typed it, which is why
-// docs/missing-work.md lists identity as an open gap.
+// ProjectOwner returns the configured owner only when OwnerID identifies one
+// unambiguous member of the project roster. An unset or stale owner id fails
+// closed without making the snapshot unreadable.
+func (s ProjectSnapshot) ProjectOwner() (Owner, bool) {
+	want := normalizePerson(s.OwnerID)
+	if want == "" {
+		return Owner{}, false
+	}
+
+	var owner Owner
+	found := false
+	for _, member := range s.Team {
+		if normalizePerson(member.ID) != want {
+			continue
+		}
+		if found {
+			return Owner{}, false
+		}
+		owner, found = member, true
+	}
+	return owner, found
+}
+
+// ApproverMember reports whether name identifies the configured project owner
+// by id or full name. Matching ignores case and repeated spaces because a
+// human types it. An absent or unrecognized owner id is not approval authority.
+// The name is accountability, not authentication: nothing here proves who
+// typed it, which is why docs/missing-work.md lists identity as an open gap.
 func (s ProjectSnapshot) ApproverMember(name string) (Owner, bool) {
 	want := normalizePerson(name)
 	if want == "" {
 		return Owner{}, false
 	}
-	for _, member := range s.Team {
-		if normalizePerson(member.ID) == want || normalizePerson(member.Name) == want {
-			return member, true
-		}
+	owner, ok := s.ProjectOwner()
+	if !ok {
+		return Owner{}, false
+	}
+	if want == normalizePerson(owner.ID) || want == normalizePerson(owner.Name) {
+		return owner, true
 	}
 	return Owner{}, false
 }

@@ -18,15 +18,15 @@ import (
 // and the real tracker, driven by the deterministic scripted model over a
 // temporary data directory.
 //
-// It is the one path that both reviews and decides, and it decides only after a
-// named human answers the prompt. Without a terminal it declines, because a
-// pipe is not a person.
+// It is the one path that both reviews and decides, and it approves only after
+// the configured project owner answers the prompt. Without a terminal it
+// declines, because a pipe is not a person.
 func runDemo(args []string, stdin io.Reader, out io.Writer) error {
 	flags := flagSet("demo", out)
 	project := flags.String("project", "delta-onboarding", "project id to walk through")
 	fixtures := flags.String("fixtures", "", "fixture directory to seed from (default "+defaultFixtures+")")
 	dataDir := flags.String("data", "", "data directory to use (default: a temporary one, removed afterwards)")
-	as := flags.String("as", "", "name recorded on the approval (default: the first member of the project team)")
+	as := flags.String("as", "", "project-owner name or id recorded on the approval (default: configured project owner)")
 	approve := flags.Bool("approve", false, "approve the proposed update without prompting")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -69,16 +69,12 @@ func runDemo(args []string, stdin io.Reader, out io.Writer) error {
 		return err
 	}
 	if strings.TrimSpace(*as) == "" {
-		member, ok := firstTeamMember(snapshot)
-		if !ok {
-			return fmt.Errorf("project %q has no team, so nobody can approve an update for it; add a team member first", *project)
-		}
-		*as = member
+		*as, _ = configuredProjectOwner(snapshot)
 	}
 
 	fmt.Fprintln(out, "Offline walkthrough: the scripted model, the real rules, the real tracker.")
 	fmt.Fprintln(out, "Nothing here can reach a network or a provider.")
-	fmt.Fprintf(out, "Project %s (%s) at version %d; approver %s, from the project team.\n",
+	fmt.Fprintf(out, "Project %s (%s) at version %d; approver %s.\n",
 		snapshot.Name, snapshot.ProjectID, snapshot.Version, *as)
 
 	var review *domain.PipelineReview
@@ -123,17 +119,19 @@ func runDemo(args []string, stdin io.Reader, out io.Writer) error {
 	return printAudit(ctx, svc, *project, out)
 }
 
-// firstTeamMember is the demo's default approver. Approving is a project-owner
-// decision, so the demo names a member of the team instead of borrowing the
-// shell's user, which would be refused.
-func firstTeamMember(snapshot domain.ProjectSnapshot) (string, bool) {
-	for _, member := range snapshot.Team {
-		if name := strings.TrimSpace(member.Name); name != "" {
-			return name, true
-		}
-		if id := strings.TrimSpace(member.ID); id != "" {
-			return id, true
-		}
+// configuredProjectOwner is the demo's default approver. It never infers
+// ownership from team order; an absent or stale owner id stays unset so an
+// approval cannot proceed without operator configuration.
+func configuredProjectOwner(snapshot domain.ProjectSnapshot) (string, bool) {
+	owner, ok := snapshot.ProjectOwner()
+	if !ok {
+		return "", false
+	}
+	if name := strings.TrimSpace(owner.Name); name != "" {
+		return name, true
+	}
+	if id := strings.TrimSpace(owner.ID); id != "" {
+		return id, true
 	}
 	return "", false
 }
@@ -143,7 +141,7 @@ func firstTeamMember(snapshot domain.ProjectSnapshot) (string, bool) {
 func askApproval(stdin io.Reader, out io.Writer, proposal domain.ProposedUpdate, as string, preapproved bool) (bool, error) {
 	if preapproved {
 		if strings.TrimSpace(as) == "" {
-			return false, errors.New("--approve needs a name: pass --as <name> or unset USER")
+			return false, errors.New("--approve needs the project owner's name or id: pass --as <name-or-id>")
 		}
 		fmt.Fprintf(out, "\n--approve: approving %s as %s.\n", proposal.UpdateID, as)
 		return true, nil

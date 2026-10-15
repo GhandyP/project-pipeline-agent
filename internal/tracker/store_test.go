@@ -77,6 +77,35 @@ func auditActions(t *testing.T, store *Store, projectID string) []string {
 	return out
 }
 
+func setStoredOwnerID(t *testing.T, store *Store, ownerID string, omit bool) {
+	t.Helper()
+	path := filepath.Join(store.Dir(), "projects", "cobalt-billing.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read project: %v", err)
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatalf("decode project: %v", err)
+	}
+	if omit {
+		delete(document, "owner_id")
+	} else {
+		encoded, err := json.Marshal(ownerID)
+		if err != nil {
+			t.Fatalf("encode owner id: %v", err)
+		}
+		document["owner_id"] = encoded
+	}
+	updated, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		t.Fatalf("encode project: %v", err)
+	}
+	if err := os.WriteFile(path, append(updated, '\n'), 0o644); err != nil {
+		t.Fatalf("write project: %v", err)
+	}
+}
+
 func TestSeedDoesNotOverwriteAnExistingProject(t *testing.T) {
 	store := newStore(t)
 	again, err := store.Seed(filepath.Join("..", "..", "testdata", "projects"))
@@ -176,27 +205,64 @@ func TestApplyWritesOnceAndRecordsBothSteps(t *testing.T) {
 // TestApplyReplayReturnsTheRecordedOutcome is the idempotency contract (S11):
 // the second identical decision changes nothing.
 func TestApplyReplayReturnsTheRecordedOutcome(t *testing.T) {
-	store := newStore(t)
-	proposal := mustProposal(t, store, "cobalt-billing", "",
-		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
-	approval := domain.Approval{By: "Ana Ruiz", At: fixedNow}
+	for _, by := range []string{"Ana Ruiz", "u-ana"} {
+		t.Run(by, func(t *testing.T) {
+			store := newStore(t)
+			proposal := mustProposal(t, store, "cobalt-billing", "",
+				domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+			approval := domain.Approval{By: by, At: fixedNow}
 
-	first, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, approval)
-	if err != nil {
-		t.Fatalf("first Apply: %v", err)
-	}
-	second, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, approval)
-	if err != nil {
-		t.Fatalf("replayed Apply: %v", err)
-	}
-	if !reflect.DeepEqual(first, second) {
-		t.Errorf("replay returned %+v, want the recorded %+v", second, first)
-	}
-	if got := projectVersion(t, store, "cobalt-billing"); got != 12 {
-		t.Errorf("version after replay = %d, want 12", got)
-	}
-	if got := auditActions(t, store, "cobalt-billing"); len(got) != 2 {
-		t.Errorf("audit = %v, want exactly two records after a replay", got)
+			first, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, approval)
+			if err != nil {
+				t.Fatalf("first Apply: %v", err)
+			}
+			projectPath := filepath.Join(store.Dir(), "projects", "cobalt-billing.json")
+			proposalPath := filepath.Join(store.Dir(), "proposals", "cobalt-billing", proposal.UpdateID+".json")
+			auditPath := filepath.Join(store.Dir(), "audit", "cobalt-billing.jsonl")
+			projectAfterFirst, err := os.ReadFile(projectPath)
+			if err != nil {
+				t.Fatalf("read project after first Apply: %v", err)
+			}
+			proposalAfterFirst, err := os.ReadFile(proposalPath)
+			if err != nil {
+				t.Fatalf("read proposal after first Apply: %v", err)
+			}
+			auditAfterFirst, err := os.ReadFile(auditPath)
+			if err != nil {
+				t.Fatalf("read audit after first Apply: %v", err)
+			}
+
+			second, err := store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, approval)
+			if err != nil {
+				t.Fatalf("replayed Apply: %v", err)
+			}
+			if !reflect.DeepEqual(first, second) {
+				t.Errorf("replay returned %+v, want the recorded %+v", second, first)
+			}
+			projectAfterReplay, err := os.ReadFile(projectPath)
+			if err != nil {
+				t.Fatalf("read project after replay: %v", err)
+			}
+			proposalAfterReplay, err := os.ReadFile(proposalPath)
+			if err != nil {
+				t.Fatalf("read proposal after replay: %v", err)
+			}
+			auditAfterReplay, err := os.ReadFile(auditPath)
+			if err != nil {
+				t.Fatalf("read audit after replay: %v", err)
+			}
+			if string(projectAfterReplay) != string(projectAfterFirst) ||
+				string(proposalAfterReplay) != string(proposalAfterFirst) ||
+				string(auditAfterReplay) != string(auditAfterFirst) {
+				t.Error("replaying the owner approval wrote project, proposal or audit state")
+			}
+			if got := projectVersion(t, store, "cobalt-billing"); got != 12 {
+				t.Errorf("version after replay = %d, want 12", got)
+			}
+			if got := auditActions(t, store, "cobalt-billing"); len(got) != 2 {
+				t.Errorf("audit = %v, want exactly two records after a replay", got)
+			}
+		})
 	}
 }
 
@@ -424,6 +490,108 @@ func TestNoTemporaryFilesAreLeftBehind(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk: %v", err)
+	}
+}
+
+func TestApplyRequiresTheConfiguredRosterOwnerAndLeavesStateUntouched(t *testing.T) {
+	cases := []struct {
+		name    string
+		ownerID string
+		by      string
+		omit    bool
+	}{
+		{name: "non-owner team member", ownerID: "u-ana", by: "Luis Prado"},
+		{name: "outsider", ownerID: "u-ana", by: "Outsider"},
+		{name: "missing owner on a legacy snapshot", by: "Ana Ruiz", omit: true},
+		{name: "owner not on the roster", ownerID: "u-absent", by: "Ana Ruiz"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newStore(t)
+			setStoredOwnerID(t, store, tc.ownerID, tc.omit)
+			proposal := mustProposal(t, store, "cobalt-billing", "owner gate test",
+				domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+
+			projectPath := filepath.Join(store.Dir(), "projects", "cobalt-billing.json")
+			proposalPath := filepath.Join(store.Dir(), "proposals", "cobalt-billing", proposal.UpdateID+".json")
+			auditPath := filepath.Join(store.Dir(), "audit", "cobalt-billing.jsonl")
+			projectBefore, err := os.ReadFile(projectPath)
+			if err != nil {
+				t.Fatalf("read project before Apply: %v", err)
+			}
+			proposalBefore, err := os.ReadFile(proposalPath)
+			if err != nil {
+				t.Fatalf("read proposal before Apply: %v", err)
+			}
+			auditBefore, err := os.ReadFile(auditPath)
+			if err != nil {
+				t.Fatalf("read audit before Apply: %v", err)
+			}
+
+			_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: tc.by, At: fixedNow})
+			if !errors.Is(err, domain.ErrNotApprover) {
+				t.Fatalf("Apply as %q with owner_id %q error = %v, want ErrNotApprover", tc.by, tc.ownerID, err)
+			}
+			if !strings.Contains(err.Error(), "project owner") {
+				t.Errorf("error = %v, want it to identify the project-owner requirement", err)
+			}
+
+			for _, file := range []struct {
+				name string
+				path string
+				want []byte
+			}{
+				{name: "project", path: projectPath, want: projectBefore},
+				{name: "proposal", path: proposalPath, want: proposalBefore},
+				{name: "audit", path: auditPath, want: auditBefore},
+			} {
+				got, err := os.ReadFile(file.path)
+				if err != nil {
+					t.Fatalf("read %s after rejected Apply: %v", file.name, err)
+				}
+				if string(got) != string(file.want) {
+					t.Errorf("%s changed after rejected Apply", file.name)
+				}
+			}
+			if got := projectVersion(t, store, "cobalt-billing"); got != 11 {
+				t.Errorf("project version = %d, want 11", got)
+			}
+			if got := auditActions(t, store, "cobalt-billing"); len(got) != 1 || !strings.HasPrefix(got[0], domain.AuditProposed) {
+				t.Errorf("audit actions = %v, want only the stored proposal", got)
+			}
+		})
+	}
+}
+
+func TestOwnerlessLegacySnapshotCanBeReadReviewedAndProposedButNotApproved(t *testing.T) {
+	store := newStore(t)
+	setStoredOwnerID(t, store, "", true)
+
+	snapshot, err := store.Snapshot(context.Background(), "cobalt-billing")
+	if err != nil {
+		t.Fatalf("Snapshot of legacy owner-less project: %v", err)
+	}
+	if snapshot.OwnerID != "" {
+		t.Fatalf("owner_id = %q, want empty for legacy project", snapshot.OwnerID)
+	}
+	if _, err := domain.Derive(snapshot, fixedNow, domain.DefaultPolicy()); err != nil {
+		t.Fatalf("Derive findings for legacy project: %v", err)
+	}
+	proposal := mustProposal(t, store, "cobalt-billing", "legacy owner-less project",
+		domain.ModelChange{MilestoneID: "m-2", Field: "owner_id", Value: "u-sofia"})
+	if _, err := store.Proposal(context.Background(), "cobalt-billing", proposal.UpdateID); err != nil {
+		t.Fatalf("load proposal for legacy project: %v", err)
+	}
+
+	_, err = store.Apply(context.Background(), "cobalt-billing", proposal.UpdateID, domain.Approval{By: "Ana Ruiz", At: fixedNow})
+	if !errors.Is(err, domain.ErrNotApprover) {
+		t.Fatalf("Apply without configured owner error = %v, want ErrNotApprover", err)
+	}
+	if got := projectVersion(t, store, "cobalt-billing"); got != 11 {
+		t.Errorf("project version = %d, want 11", got)
+	}
+	if got := auditActions(t, store, "cobalt-billing"); len(got) != 1 || !strings.HasPrefix(got[0], domain.AuditProposed) {
+		t.Errorf("audit actions = %v, want only the stored proposal", got)
 	}
 }
 
